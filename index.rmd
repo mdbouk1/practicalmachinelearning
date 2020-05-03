@@ -11,20 +11,91 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+First step is loading all the packages and libaries we might need 
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+Then we can load the data from the csv files 
+```{r}
+trainingset <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+testingset <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+We can perform some exporatory analysis to check the names and values of each variable. More plots can be done but ommited here for space 
+```{r}
+dim(trainingset)
+dim(testingset)
+str(trainingset)
+str(testingset)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+It seems many columns have missing values so we can delte these columns as they can't be used. 
+```{r}
+trainingset<-trainingset[,colSums(is.na(trainingset)) == 0]
+testingset <-testingset[,colSums(is.na(testingset)) == 0]
+```
+
+Also it seems that some columns have data that are do not add any input to any potential model, so we can delete these. 
+```{r}
+trainingset   <-trainingset[,-c(1:7)]
+testingset <-testingset[,-c(1:7)]
+```
+
+Then we have the data cleaned and ready. 
+The first step is to parition the data so that we can perform cross validation. 
+We can split the training datatest into a testing and training sets based on the classe variable. 
+```{r}
+traintrainset <- createDataPartition(y=trainingset$classe, p=0.75, list=FALSE)
+TrainTrainingSet <- trainingset[traintrainset, ] 
+TestTrainingSet <- trainingset[-traintrainset, ]
+```
+Since the outcome variable we are trying to predict is a factor variable then it seems best to start with a simple decision tree model using the rpart method. Unfortunately, the train fucntion of Caret took hours to run this model so we will use the rpart package and its repsective function. This way we are training the model to predict classe based on all other variables in the training data set. 
+```{r}
+model1 <- rpart(classe ~ ., data=TrainTrainingSet, method="class")
+```
+Then we can use this model to predcit the classe outcome of the testing set we created earlier. 
+```{r}
+prediction1 <- predict(model1, TestTrainingSet, type = "class")
+```
+For visualization of this simple tree we can use the rpart.plot function 
+
+```{r}
+rpart.plot(model1, main="Classification Tree", extra=102, under=TRUE, faclen=0)
+```
+
+Finally, we cam check the accuracy of this model by running the confusion martrix function: 
+```{r}
+confusionMatrix(prediction1, TestTrainingSet$classe)
+```
+
+We can see that the accuracy is around 75% which means that the expected out of sample error close to 25%. 
+
+Next we can run a model using te random forest method. (the train function of caret couldn't run this model on my pC, it took hours and no result)
+
+```{r}
+model2 <- randomForest(classe ~. , data=TrainTrainingSet, method="class")
+```
+Next we can predict the calsse of the testing set based on this model. 
+```{r}
+prediction2 <- predict(model2, TestTrainingSet, type = "class")
+```
+
+And check how it performed using the confusion matrix
+```{r}
+confusionMatrix(prediction2, TestTrainingSet$classe)
+```
+This model yielded an accuracy of 99.5% with an expected out of sample erroe of 0.5%. It is unlikely that a different model can yield better results. 
+
+To predict the classe of the testingset provided we can use model2 
+```{r}
+predictfinal <- predict(model2, testingset, type="class")
+predictfinal
+```
+ 
+ 
